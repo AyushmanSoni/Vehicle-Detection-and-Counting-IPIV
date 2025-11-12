@@ -1,30 +1,31 @@
 import cv2
 import numpy as np
 
-# Load the video
-video_path = r'carsvid.mp4'
+# Load video
+video_path = "carsvid.mp4"
 cap = cv2.VideoCapture(video_path)
 
-# List to store all zones (each zone = list of (x, y) points)
-zones = []
-current_zone = []
+zones = []          # List of all zones (each zone = list of points)
+current_zone = []   # Zone being drawn
 
-# Mouse callback function
+# Mouse callback for drawing polygon zones
 def draw_zone(event, x, y, flags, param):
     global current_zone, zones
 
+    # Left-click to add points
     if event == cv2.EVENT_LBUTTONDOWN:
         current_zone.append((x, y))
+
+    # Right-click to finalize a zone
     elif event == cv2.EVENT_RBUTTONDOWN:
-        # Right click = close current zone
         if len(current_zone) >= 3:
             zones.append(current_zone.copy())
-            current_zone = []
-            print(f"Zone {len(zones)} saved ✅")
+            print(f"✅ Zone {len(zones)} saved with {len(current_zone)} points")
         else:
-            print("Need at least 3 points to form a zone.")
+            print("⚠️ Need at least 3 points to form a zone")
+        current_zone = []  # Reset current zone
 
-# Create window and set mouse callback
+# Window setup
 cv2.namedWindow("Mark Zones")
 cv2.setMouseCallback("Mark Zones", draw_zone)
 
@@ -36,25 +37,32 @@ while True:
 
     frame = cv2.resize(frame, (1280, 720))
 
-    # Draw current zone points
-    for pt in current_zone:
-        cv2.circle(frame, pt, 5, (0, 0, 255), -1)
+    # Draw current zone (in progress)
     if len(current_zone) > 1:
         cv2.polylines(frame, [np.array(current_zone, np.int32)], False, (0, 255, 0), 2)
+    for pt in current_zone:
+        cv2.circle(frame, pt, 4, (0, 0, 255), -1)
 
     # Draw completed zones
-    for zone in zones:
+    for i, zone in enumerate(zones):
         cv2.polylines(frame, [np.array(zone, np.int32)], True, (255, 0, 0), 2)
+        # Label zone number at centroid
+        M = cv2.moments(np.array(zone))
+        if M["m00"] != 0:
+            cx, cy = int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])
+            cv2.putText(frame, f"Zone {i+1}", (cx - 30, cy),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-    cv2.putText(frame, "Left click = add point | Right click = save zone | 's' = save all | 'q' = quit",
-                (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    # Display help text
+    cv2.putText(frame, "Left click = add point | Right click = close zone | 's' = save | 'q' = quit",
+                (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
     cv2.imshow("Mark Zones", frame)
     key = cv2.waitKey(1) & 0xFF
 
-    if key == ord('s'):  # Save all zones to file
+    if key == ord('s'):
         np.save('zones.npy', np.array(zones, dtype=object))
-        print("All zones saved to zones.npy ✅")
+        print("💾 All zones saved to zones.npy successfully.")
     elif key == ord('q'):
         break
 
